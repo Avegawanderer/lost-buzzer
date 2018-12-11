@@ -1737,7 +1737,13 @@
         </file>
     </group>
     <file>
+        <name>$PROJ_DIR$\..\..\source\board.cpp</name>
+    </file>
+    <file>
         <name>$PROJ_DIR$\..\..\source\main.cpp</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\pwm.cpp</name>
     </file>
     <file>
         <name>$PROJ_DIR$\..\..\source\stm8s_conf.h</name>
