@@ -24,17 +24,12 @@ uint8_t preAlarmReason;
 bState_t state;
 alarmReason_t almReason;
 
+// AFR0 and AFR7 must be set for TIM1 PWM outputs at PortC
+
 
 int main()
 {
-    /* Fmaster = 1MHz */
-    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV16);
-    
-    /* GPIOD reset */
-    GPIO_DeInit(GPIOD);
-
-    /* Configure PD0 (LED1) as output push-pull low (led switched on) */
-    GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)(GPIO_PIN_4 | GPIO_PIN_5), GPIO_MODE_OUT_PP_LOW_FAST);
+    BRD_Init();
   
     // System timer init
     TIM4_Cmd(DISABLE);
@@ -49,13 +44,16 @@ int main()
         
     // Start
     enableInterrupts();
+    TIM4_Cmd(ENABLE);
+    
+    PWM_Beep();
     
     while(1)
     {
         asm("WFI");
         while (!sysFlag_TmrTick);
         sysFlag_TmrTick = 0;
-   
+#if 0
         // Do the job
         switch (state)
         {
@@ -110,8 +108,9 @@ int main()
             case ST_SLEEP:
                 break;
         }
+#endif      
         
-        
+        BRD_SetLed1(!led1State);
         BRD_SetLed2(!led2State);
     }
 }
