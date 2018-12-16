@@ -8,7 +8,7 @@ uint8_t led2State;
 
 void BRD_Init(void)
 {
-      /* Fmaster = 1MHz */
+      /* Fmaster = 2MHz */
     CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV8);
     
     /* GPIOD reset */
