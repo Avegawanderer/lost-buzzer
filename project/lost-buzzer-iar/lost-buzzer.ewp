@@ -1740,6 +1740,9 @@
         <name>$PROJ_DIR$\..\..\source\board.cpp</name>
     </file>
     <file>
+        <name>$PROJ_DIR$\..\..\source\buzzer.cpp</name>
+    </file>
+    <file>
         <name>$PROJ_DIR$\..\..\source\main.cpp</name>
     </file>
     <file>
