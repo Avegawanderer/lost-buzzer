@@ -1,7 +1,16 @@
 
 
 #include "board.h"
-#include "buzzer.h"
+//#include "buzzer.h"
+
+
+void Buzz_Stop() {}
+void Buzz_Init() {}
+uint8_t Buzz_IsActive() {}
+void Buzz_Process() {}
+void Buzz_StartContinuous() {}
+void Buzz_StartMs() {}
+
 
 
 // STM8S003: 8kB FLASH, 1kB RAM, 128B EEPROM
@@ -73,7 +82,21 @@ void swState(bState_t newState)
 void incSatTimer(uint16_t *tmr)
 {
     if (*tmr < MAX_TMR)
-        *tmr++;
+        (*tmr)++;
+}
+
+#define AWU_1MS     ((3 << 8) | (20 << 0))
+#define AWU_10MS    ((6 << 8) | (36 << 0))
+
+void setAwuPeriod(uint16_t value)
+{
+    // Set the TimeBase
+    AWU->TBR &= (uint8_t)(~AWU_TBR_AWUTB);
+    AWU->TBR |= (uint8_t)(value >> 8);
+
+    // Set the APR divider
+    AWU->APR &= (uint8_t)(~AWU_APR_APR);
+    AWU->APR |= (uint8_t)(value & 0xFF);
 }
 
 
@@ -98,14 +121,17 @@ int main()
     // Enable LSI
     CLK_LSICmd(ENABLE);
 
+    // Enable AWU
+    AWU->CSR |= AWU_CSR_AWUEN;
     // AWU setup for WAKEUP timebase
-    AWU_Init(AWU_TIMEBASE_8MS);
-    AWU_Cmd(ENABLE);
+    setAwuPeriod(AWU_1MS);
+    
     
     // Use Active-halt with main voltage regulator (MVR) powered off 
     // (increased startup time of ~50us is acceptable)
     // Do not used fast clock wakeup since HSI is always used
-    CLK_SlowActiveHaltWakeUpCmd(ENABLE);
+    //CLK_SlowActiveHaltWakeUpCmd(ENABLE);
+    //CLK_SlowActiveHaltWakeUpCmd(DISABLE);
     
     // Init FSM
     state = ST_WAKEUP;
@@ -114,6 +140,9 @@ int main()
     // Start
     enableInterrupts();  
     
+    while(1) {
+        asm("HALT");    // Active halt - AFU is enabled
+    }
     
     while(1)
     {
@@ -152,6 +181,7 @@ int main()
             {
                 case ST_WAKEUP:                         // [8ms]
                     // Provide some delay to ensure supply voltage is OK
+                    break;
                     if (timers.state >= 5)
                     {
                         if (flags.mainSupplyOk)
@@ -343,8 +373,14 @@ INTERRUPT_HANDLER(IRQ_Handler_TIM4, 23)
 
 INTERRUPT_HANDLER(AWU_IRQHandler, 1)
 {
-    sysFlag_TmrTick = 1;
-    AWU_GetFlagStatus();   
+    volatile unsigned char reg;
+    BRD_SetLed2(1);
+    
+    //sysFlag_TmrTick = 1;
+    //AWU_GetFlagStatus();   
+    reg = AWU->CSR;     // Reading AWU_CSR register clears the interrupt flag.
+    
+    BRD_SetLed2(0);
 }
 
 INTERRUPT_HANDLER(IRQ_Handler_EXTIO3, 6)
