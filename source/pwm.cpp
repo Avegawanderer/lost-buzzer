@@ -34,18 +34,28 @@ void PWM_Beep(uint8_t muteLevel)
     );
 
 
-    TIM1_Cmd(ENABLE);
-    TIM1_CtrlPWMOutputs(ENABLE);
+    
     
     switch (muteLevel)
     {
         case 0:
+            TIM1_Cmd(ENABLE);
+            TIM1_CtrlPWMOutputs(ENABLE);
             TIM1->DTR = (0x3 << 5) | 0x1F;
             break;
         case 1:
+            TIM1_Cmd(ENABLE);
+            TIM1_CtrlPWMOutputs(ENABLE);
             TIM1->DTR = (0x2 << 5) | 0x1F;      // FIXME
             break;
         case 2:
+            TIM1_Cmd(ENABLE);
+            TIM1_CtrlPWMOutputs(ENABLE);
+            TIM1->DTR = (0x1 << 5) | 0x1F;      // FIXME
+            break;
+        case 3:
+            TIM1_Cmd(ENABLE);
+            TIM1_CtrlPWMOutputs(ENABLE);
             TIM1->DTR = (0x1 << 5) | 0x1F;      // FIXME
             break;
         default:

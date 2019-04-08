@@ -72,7 +72,7 @@ static struct {
 
 volatile uint8_t sysFlag_TmrTick;
 static bState_t state;
-
+static uint8_t muteLevel;
 
 
 
@@ -108,10 +108,82 @@ void stopAwu(void)
 }
 
 
+//=================================================================//
+// GPIO management
+
+uint8_t led1State;
+uint8_t led2State;
+
+void initGpio(void)
+{
+    /* Configure LED1 and LED2 as output push-pull low (led switched on) */
+    //GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)(GPIO_PIN_4 | GPIO_PIN_5), GPIO_MODE_IN_PU_NO_IT);
+
+
+    /* Configure LED1 and LED2 as output push-pull low (led switched on) */
+    GPIO_Init(GPIOA, (GPIO_Pin_TypeDef)(GPIO_PIN_2 | GPIO_PIN_3), GPIO_MODE_OUT_PP_HIGH_FAST);
+
+    // Configure as input with interrupt enabled
+    GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)(GPIO_PIN_2), GPIO_MODE_IN_FL_IT);
+    // Enable interrupt for main supply rise
+    EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_RISE_ONLY);
+
+    // Configure PB5 as output to prevent floating
+    GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)(GPIO_PIN_4 | GPIO_PIN_5), GPIO_MODE_OUT_OD_LOW_SLOW);
+
+    /* Configure OCx outputs */
+    GPIO_Init(GPIOC, (GPIO_Pin_TypeDef)(GPIO_PIN_3 | GPIO_PIN_4), GPIO_MODE_OUT_PP_HIGH_FAST);
+    GPIO_Init(GPIOC, (GPIO_Pin_TypeDef)(GPIO_PIN_6 | GPIO_PIN_7), GPIO_MODE_OUT_PP_LOW_FAST);
+}
+
+
+void BRD_SetLed1(uint8_t isOn)
+{
+    if (isOn)
+        GPIO_WriteLow(GPIOA, GPIO_PIN_2);
+    else
+        GPIO_WriteHigh(GPIOA, GPIO_PIN_2);
+    led1State = isOn;
+}
+
+
+void BRD_SetLed2(uint8_t isOn)
+{
+    if (isOn)
+        GPIO_WriteLow(GPIOA, GPIO_PIN_3);
+    else
+        GPIO_WriteHigh(GPIOA, GPIO_PIN_3);
+    led2State = isOn;
+}
+
+
+uint8_t BRD_IsMainSupplyPresent(void)
+{
+    return GPIO_ReadInputData(GPIOD) & (1 << 2);
+}
+
+
+uint8_t BRD_IsButtonPressed(void)
+{
+    return !(GPIO_ReadInputData(GPIOD) & (1 << 6));     // Active low
+}
+
+
+uint8_t BRD_IsDirectControlInputActive(void)
+{
+    return !(GPIO_ReadInputData(GPIOD) & (1 << 4));     // Active low - TODO by config
+}
+
 
 
 //=================================================================//
 // FSM and main loop
+
+void smallDelay()
+{
+    volatile uint8_t i;
+    for (i=0; i<20; i++);
+}
 
 // Switch state of the FSM
 // PWM outputs and LEDs are disabled
@@ -140,7 +212,10 @@ int main()
     uint8_t tmp8u, i;
     uint8_t exit;
     
-    BRD_Init();
+    CLK_SYSCLKConfig(CLK_PRESCALER_HSIDIV8);    // Fmaster = 2MHz
+    CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV2);    // Fcpu = 1MHz
+
+    initGpio();
     Buzz_Init();
     
     // Enable LSI
@@ -150,8 +225,7 @@ int main()
     ADC1_PrescalerConfig(ADC1_PRESSEL_FCPU_D4);
 
     // AWU setup for WAKEUP timebase
-    //startAwu(AWU_10MS);
-    startAwu(AWU_1MS);      // FIXME DEBUG
+    startAwu(AWU_10MS);
     
     // Use Active-halt with main voltage regulator (MVR) powered off 
     // (increased startup time of ~50us is acceptable)
@@ -162,14 +236,15 @@ int main()
     // Init FSM
     state = ST_WAKEUP;
     sysFlag_TmrTick = 0;
+    timers.state = 0;
     
     // Start
     enableInterrupts();  
     
     // FIXME DEBUG
-    while(1) {
-        asm("HALT");    // Active halt - AFU is enabled
-    }
+    //while(1) {
+    //    asm("HALT");    // Active halt - AFU is enabled
+    //}
     
     while(1)
     {
@@ -208,56 +283,73 @@ int main()
             {
                 case ST_WAKEUP:                         // [10ms]
                     // Provide some delay to ensure supply voltage is OK
+                    if (timers.state == 4)
+                    {
+                        // Enable external pull-up for button input (check mute level)
+                        GPIO_Init(GPIOA, GPIO_PIN_1, GPIO_MODE_OUT_PP_HIGH_FAST);
+                    }
                     if (timers.state >= 5)
                     {
+
+                        // Capture input parameters (volume level / mute / etc)
+                        // Measure voltage level on BTN input. Depending on it, mute or disable buzzer
+                        ADC1_Cmd(ENABLE);
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, (ADC1_Channel_TypeDef)adcChBtn, ADC1_ALIGN_RIGHT);
+                        ADC1_StartConversion();
+                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
+                        uint16_t adcBtn = ADC1_GetConversionValue();
+                        // Select battery channel to enable digital function on BTN pin
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, (ADC1_Channel_TypeDef)adcChPowerBattery, ADC1_ALIGN_RIGHT);
+                        // Enable pad pull-up for button
+                        GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)(GPIO_PIN_6), GPIO_MODE_IN_PU_NO_IT);
+                        // Enable pad pull-up for control
+                        GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)(GPIO_PIN_4), GPIO_MODE_IN_PU_NO_IT);
+
+                        // Determine mute level depending on ADC conversion result
+                        muteLevel = (adcBtn > 970) ? 0 :
+                                    ((adcBtn > 880) ? 1 :
+                                    ((adcBtn > 810) ? 2 :
+                                    ((adcBtn > 750) ? 4 : 4)));     // FIXME DEBUG
+                        Buzz_SetVolume(muteLevel);
+
+                        // Blink
+                        setAwuPeriod(AWU_100MS);
+                        if (muteLevel >= 4)
+                        {
+                            //BRD_SetLed2(1);
+                            Buzz_StartContinuous();
+                            for (i = 0; i<5; i++)
+                            {
+                                asm("WFI");
+                            }
+                            //BRD_SetLed2(0);
+                            Buzz_Stop();
+                        }
+                        else
+                        {
+                            for (i = 0; i<muteLevel+1; i++)
+                            {
+                                //BRD_SetLed2(1);
+                                Buzz_StartContinuous();
+                                asm("WFI");
+                                //BRD_SetLed2(0);
+                                Buzz_Stop();
+                                asm("WFI");
+                            }
+                        }
+                        setAwuPeriod(AWU_10MS);
+                        sysFlag_TmrTick = 0;
+
+                        // Detect cell count for power battery
+                        // TODO
+
+                        // Reset data for RUN state
+                        alarms.directControl.dirCtrlState = 0;
+                        // add more here ...
+
+                        // __enable_uart();        // And other peripherals - TODO
                         if (flags.mainSupplyOk)
                         {
-                            // Capture input parameters (volume level / mute / etc)
-                            // Measure voltage level on BTN input. Depending on it, mute or disable buzzer
-                            ADC1_Cmd(ENABLE);
-                            ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, (ADC1_Channel_TypeDef)adcChBtn, ADC1_ALIGN_RIGHT);
-                            ADC1_StartConversion();
-                            while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
-                            uint16_t adcBtn = ADC1_GetConversionValue();
-                            // Select battery channel to enable digital function on BTN pin
-                            ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, (ADC1_Channel_TypeDef)adcChPowerBattery, ADC1_ALIGN_RIGHT);
-                            uint8_t muteLevel = (adcBtn > 800) ? 0 :
-                                                ((adcBtn > 500) ? 1 :
-                                                ((adcBtn > 200) ? 2 : 3));
-                            Buzz_SetVolume(muteLevel);
-
-                            // Blink
-                            setAwuPeriod(AWU_100MS);
-                            if (muteLevel >= 3)
-                            {
-                                BRD_SetLed2(1);
-                                for (i = 0; i<4; i++)
-                                {
-                                    asm("HALT");
-                                }
-                                BRD_SetLed2(0);
-                            }
-                            else
-                            {
-                                for (i = 0; i<muteLevel+1; i++)
-                                {
-                                    BRD_SetLed2(1);
-                                    asm("HALT");
-                                    BRD_SetLed2(0);
-                                    asm("HALT");
-                                }
-                            }
-                            sysFlag_TmrTick = 0;
-                            
-                            // Detect cell count for power battery
-                            // TODO
-                            
-                            // Reset data for RUN state
-                            alarms.directControl.dirCtrlState = 0;
-                            // add more here ...
-                            
-                            // __enable_uart();        // And other peripherals - TODO
-                            
                             swState(ST_RUN);
                             setAwuPeriod(AWU_1MS);
                             exit = 0;
@@ -353,7 +445,7 @@ int main()
                             swState(ST_SLEEP);
                             exit = 0;
                         }
-                        if (++timers.dly >= 200)
+                        if (++timers.dly >= 100)
                         {
                             timers.dly = 0;
                             if (++timers.evt == 5)
@@ -385,29 +477,46 @@ int main()
                         {
                             // User wants to disable buzzer
                             swState(ST_SLEEP);
+                            BRD_SetLed1(0);
+                            BRD_SetLed2(0);
                             exit = 0;
+                            break;
                         }
-                        if (timers.dly >= 500)
+                        if (timers.dly == 0)
+                        {
+                            // Beep long few times
+                            Buzz_StartMs(250);
+                        }
+                        if (++timers.dly >= 250)
                         {
                             timers.dly = 0;
-                            // Beep long few times
-                            Buzz_StartMs(500);
-                        }
-                        else
-                        {
-                            timers.dly++;
                         }
                     }
                     break;
                     
                     
                 case ST_SLEEP:
+                    //GPIO_DeInit(GPIOC);
+                    //GPIO_DeInit(GPIOA);
+                    //GPIO_DeInit(GPIOD);
+                    //GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)(GPIO_PIN_4 | GPIO_PIN_5), GPIO_MODE_OUT_PP_LOW_SLOW);
+                    //smallDelay();
+
+                // Enable external pull-up for button input (check mute level)
+                GPIO_Init(GPIOA, GPIO_PIN_1, GPIO_MODE_OUT_PP_LOW_SLOW);
+                // Enable pad pull-up for button
+                GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)(GPIO_PIN_6), GPIO_MODE_IN_FL_NO_IT);
+
                     stopAwu();       		// No interrupts from AWU in sleep mode - only external irq
                     asm("HALT");            // Halt - AFU is disabled
                     // *** halted ***
                     // Woke up from halt by main supply IRQ - the only source of interrupts for this state
                     swState(ST_WAKEUP);
                     startAwu(AWU_10MS);
+                    // Configure PD2 as normal input
+                    //GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)(GPIO_PIN_2), GPIO_MODE_IN_FL_NO_IT);
+                    //initGpio();
+                    //GPIO_Init(GPIOB, (GPIO_Pin_TypeDef)(GPIO_PIN_4 | GPIO_PIN_5), GPIO_MODE_OUT_PP_HIGH_FAST);
                     break;
 
             }  // ~switch (state)
@@ -450,16 +559,16 @@ INTERRUPT_HANDLER(AWU_IRQHandler, 1)
     volatile unsigned char reg;
 
     // FIXME DEBUG
-    BRD_SetLed2(1);
+    //BRD_SetLed2(1);
 
     sysFlag_TmrTick = 1;
     reg = AWU->CSR;     // Reading AWU_CSR register clears the interrupt flag.
     
     // FIXME DEBUG
-    BRD_SetLed2(0);
+    //BRD_SetLed2(0);
 }
 
-INTERRUPT_HANDLER(IRQ_Handler_EXTIO3, 6)
+INTERRUPT_HANDLER(IRQ_Handler_GPIOD, 6)
 {
     // Do nothing. Interrupt handler is used to run main loop.
 }
