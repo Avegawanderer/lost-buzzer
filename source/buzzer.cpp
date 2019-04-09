@@ -41,7 +41,7 @@ static timCtrl_t toneCtrl[ToneCount] =
 {
     // PWM Period (must be even)      MuteNone             Mute1               Mute2               MuteFull
     {.pwm_period = 100,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // ToneSilence
-    {.pwm_period = 366,     .pwm_dt = {DT(200),             DT(310),            DT(350),            0xFF} },        // Tone1
+    {.pwm_period = 366,     .pwm_dt = {DT(180),             DT(320),            DT(356),            0xFF} },        // Tone1
     {.pwm_period = 416,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // Tone2
     {.pwm_period = 480,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // Tone3
     {.pwm_period = 500,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} }         // Tone4
@@ -144,6 +144,7 @@ void Buzz_Process(void)
                 }
                 buzzerData.queueWrCount--;
                 PWM_Beep(toneCtrl[elm.tone].pwm_period, toneCtrl[elm.tone].pwm_dt[buzzerData.muteLevel]);
+                onBuzzerStateChanged(elm.tone != ToneSilence);
                 buzzerData.timer = 0;
                 buzzerData.toneDurationMs = elm.ms;
                 buzzerState = BZ_PLAYING_QUEUED_TONE;
