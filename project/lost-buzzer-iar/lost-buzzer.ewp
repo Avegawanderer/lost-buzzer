@@ -1737,9 +1737,6 @@
         </file>
     </group>
     <file>
-        <name>$PROJ_DIR$\..\..\source\board.cpp</name>
-    </file>
-    <file>
         <name>$PROJ_DIR$\..\..\source\buzzer.cpp</name>
     </file>
     <file>
@@ -1747,6 +1744,9 @@
     </file>
     <file>
         <name>$PROJ_DIR$\..\..\source\buzzer_private.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\global_def.h</name>
     </file>
     <file>
         <name>$PROJ_DIR$\..\..\source\main.cpp</name>
