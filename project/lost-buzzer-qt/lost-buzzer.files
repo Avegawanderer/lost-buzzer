@@ -49,10 +49,15 @@
 ../../library/STM8S_StdPeriph_Driver/src/stm8s_uart3.c
 ../../library/STM8S_StdPeriph_Driver/src/stm8s_wwdg.c
 ../../source/global_def.h
+../../source/stm8s_def.h
 ../../source/buzzer.cpp
 ../../source/buzzer.h
 ../../source/buzzer_private.h
 ../../source/main.cpp
 ../../source/pwm.cpp
 ../../source/pwm.h
+../../source/uart.cpp
+../../source/uart.h
+../../source/ctrl_capture.cpp
+../../source/ctrl_capture.h
 ../../source/stm8s_conf.h
