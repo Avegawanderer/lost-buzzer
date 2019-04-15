@@ -14,6 +14,10 @@
 
 // GPIOC
 #define GPC_LED3_PIN        GPIO_PIN_5
+#define GPC_CH1_PIN         GPIO_PIN_6
+#define GPC_CH1N_PIN        GPIO_PIN_3
+#define GPC_CH2_PIN         GPIO_PIN_7
+#define GPC_CH2N_PIN        GPIO_PIN_4
 
 // GPIOD
 #define GPD_SWIM_PIN        GPIO_PIN_1

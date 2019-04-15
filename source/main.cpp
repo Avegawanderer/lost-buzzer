@@ -170,10 +170,10 @@ uint8_t isDirectControlInputActive(void)
 //=================================================================//
 // FSM and main loop
 
-void smallDelay()
+void smallDelay(uint8_t n)
 {
     volatile uint8_t i;
-    for (i=0; i<20; i++);
+    for (i=0; i<n; i++);
 }
 
 // Switch state of the FSM
@@ -223,6 +223,71 @@ int main()
 
     initGpio();
     Buzz_Init();
+    
+    //-------------------------------------//
+    // GPIO PWM test for buzzer
+    
+    // System timer init
+    TIM4_Cmd(DISABLE);
+    TIM4_TimeBaseInit(TIM4_PRESCALER_2, 366);     // F = 1000000 / TimeBase
+    TIM4_ClearFlag(TIM4_FLAG_UPDATE);
+    TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
+    
+    // Enable pull-up for button
+    GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_PU_NO_IT);
+    sysFlag_TmrTick = 0;
+    enableInterrupts(); 
+    
+    while (1)
+    {
+        if (sysFlag_TmrTick)
+        {
+            sysFlag_TmrTick = 0;
+            if (isButtonPressed())
+            {
+                setLed(Led1, 1);
+                
+                // Phase 1 ON
+                GPIO_WriteLow(GPIOC, GPC_CH1N_PIN);
+                GPIO_WriteHigh(GPIOC, GPC_CH2_PIN);
+                
+                smallDelay(20);
+                
+                // Phase 1 OFF
+                GPIO_WriteHigh(GPIOC, GPC_CH1N_PIN);
+                GPIO_WriteLow(GPIOC, GPC_CH2_PIN);
+                
+                // Phase 2 ON
+                GPIO_WriteLow(GPIOC, GPC_CH2N_PIN);
+                GPIO_WriteHigh(GPIOC, GPC_CH1_PIN);
+                
+                smallDelay(20);
+                
+                // Phase 2 OFF
+                GPIO_WriteHigh(GPIOC, GPC_CH2N_PIN);
+                GPIO_WriteLow(GPIOC, GPC_CH1_PIN);
+                
+                // Phase 3 On
+                GPIO_WriteLow(GPIOC, GPC_CH1N_PIN);
+                GPIO_WriteHigh(GPIOC, GPC_CH2_PIN);
+                
+                smallDelay(20);
+                
+                // Phase 3 OFF
+                GPIO_WriteHigh(GPIOC, GPC_CH1N_PIN);
+                GPIO_WriteLow(GPIOC, GPC_CH2_PIN);
+                
+            }
+            else
+            {
+                setLed(Led1, 0);
+            }
+        }
+    }
+    
+    
+    
+    //-------------------------------------//
     
     // Enable LSI
     CLK_LSICmd(ENABLE);
