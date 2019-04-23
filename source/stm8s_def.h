@@ -49,6 +49,23 @@
 #define TIMx_CCMR1_CC1S_BPOS    0
 
 
+/**
+    TIMx_SR1
+*/
+#define TIMx_SR1_UIF_BPOS       0
+
+
+/**
+    TIMx_SR2
+*/
+#define TIMx_SR2_CC1OF_BPOS       0
+
+
+/**
+    TIMx_EGR
+*/
+#define TIMx_EGR_UG_BPOS       0
+
 
 //==================================================================//
 //                           UART                                   //
@@ -58,8 +75,8 @@
     Baudrate macros
 */
 
-#define BRR1(x)     ((((x) & 0x0F) | ((x) >> 12)) & 0xFF)
-#define BRR2(x)     (((x) >> 4) & 0xFF)
+#define BRR2(x)     ((((x) & 0x0F) | ((x) >> (12 - 4))) & 0xFF)
+#define BRR1(x)     (((x) >> 4) & 0xFF)
 
 
 

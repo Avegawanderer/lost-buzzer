@@ -8,10 +8,13 @@
 #include "uart.h"
 
 
+/**
+    Initialize UART
 
+*/
 void UART_Init(void)
 {
-    UART1->CR1 =    (0 << 5) |          // UART enabled (no low power mode)
+    UART1->CR1 =    (0 << 5) |          // 0: UART enabled (no low power mode)
                     (0 << 4) |          // 8-n-ss, ss = 1 or 2 stop bits depending on CR3
                     (0 << 3) |          // Wakeup method
                     (0 << 2) |          // No parity control
@@ -46,25 +49,47 @@ void UART_Init(void)
     UART1->PSCR =   0;                  // Smartcard and IrDA-related
 
     // BRR for 9600 @ 2MHz = 208.(3) = 0xD0
-    UART1->BRR2 = BRR2(208);
-    UART1->BRR1 = BRR1(208);
+    uint8_t brr1 = BRR1(208);
+    uint8_t brr2 = BRR2(208);
+    UART1->BRR2 = brr2;
+    UART1->BRR1 = brr1;
 
 }
 
 
+/**
+    Run UART processing
+
+*/
 void UART_Process(void)
 {
-    uint8_t data8;
+    static uint8_t data8 = 0;
+    static uint8_t data_rd;
     // Simple loop
+
     if (UART1->SR & (1 << 5))
     {
-        data8 = UART1->DR;
+        data_rd = UART1->DR;
+        data8 = data_rd;
+        
+        UART1->DR = data8;
+        // Wait for transmitt
+        while (!(UART1->SR & (1 << 6)));
+        // Wait for self receive
+        while ((!UART1->SR & (1 << 5)));
+        // Read out echo
+        data_rd = UART1->DR;
     }
+/*
     data8++;
     UART1->DR = data8;
+    // Wait for transmitt
     while (!(UART1->SR & (1 << 6)));
+    // Wait for self receive
+    while ((!UART1->SR & (1 << 5)));
     // Read out echo
-    data8 = UART1->DR;
+    data_rd = UART1->DR;
+*/
 }
 
 

@@ -1746,6 +1746,9 @@
         <name>$PROJ_DIR$\..\..\source\buzzer_private.h</name>
     </file>
     <file>
+        <name>$PROJ_DIR$\..\..\source\ctrl_capture.cpp</name>
+    </file>
+    <file>
         <name>$PROJ_DIR$\..\..\source\global_def.h</name>
     </file>
     <file>
@@ -1756,5 +1759,11 @@
     </file>
     <file>
         <name>$PROJ_DIR$\..\..\source\stm8s_conf.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\stm8s_def.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\uart.cpp</name>
     </file>
 </project>

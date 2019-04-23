@@ -5,9 +5,10 @@
 	AFR0 and AFR7 must be set for TIM1 PWM outputs at PortC
 ********************************************************************/
 
-
-#include "buzzer.h"
 #include "global_def.h"
+#include "buzzer.h"
+#include "ctrl_capture.h"
+#include "uart.h"
 
 
 
@@ -122,7 +123,8 @@ void initGpio(void)
     GPIO_Init(GPIOD, GPD_VBAT_PIN | GPD_VREF_PIN, GPIO_MODE_IN_FL_NO_IT);
 
     // SIG, UART
-    GPIO_Init(GPIOD, GPD_SIG_PIN | GPD_UART_PIN, GPIO_MODE_IN_PU_NO_IT);
+    GPIO_Init(GPIOD, GPD_UART_PIN, GPIO_MODE_OUT_OD_HIZ_SLOW);
+    GPIO_Init(GPIOC, GPC_SIG_PIN, GPIO_MODE_IN_PU_NO_IT);
 
     // Unused pins to prevent floating
     // FIXME
@@ -161,7 +163,7 @@ uint8_t isButtonPressed(void)
 
 uint8_t isDirectControlInputActive(void)
 {
-    uint8_t pinState = (GPIOD->IDR & GPD_SIG_PIN);
+    uint8_t pinState = (GPIOC->IDR & GPC_SIG_PIN);
     return (cfg.io.directControlActiveHigh) ? pinState : !pinState;
 }
 
@@ -170,9 +172,9 @@ uint8_t isDirectControlInputActive(void)
 //=================================================================//
 // FSM and main loop
 
-void smallDelay(uint8_t n)
+void smallDelay(uint16_t n)
 {
-    volatile uint8_t i;
+    volatile uint16_t i;
     for (i=0; i<n; i++);
 }
 
@@ -203,9 +205,9 @@ void incTimer(uint16_t *tmr)
 /*
  TODO:
     - PWM dead time (mute level), frequency
-    - Buzzer signal queue
+    + Buzzer signal queue
     - UART RX/TX, autobaud
-    - PWM input capture
+    + PWM input capture
     - VREF ADC check
     - VBAT ADC check
     - SWIM pull-up
@@ -223,15 +225,54 @@ int main()
 
     initGpio();
     Buzz_Init();
+    initCapture();
+    UART_Init();
     
     //-------------------------------------//
+    // UART echo test
+#if 1
+    while(1)
+    {
+        UART_Process();
+        smallDelay(50000);
+    }
+#endif  
+    //-------------------------------------//
+
+    //-------------------------------------//
+    // Input capture test
+#if 0
+    enableInterrupts(); 
+    
+    static volatile uint16_t capTime;
+    while(1)
+    {
+        startCapture(CapPosImpulse);
+        while(isCaptureActive());
+        
+        capTime = getCapturedPulseUs();
+    }
+#endif  
+    //-------------------------------------//
+
+    
+
+    //-------------------------------------//
     // GPIO PWM test for buzzer
+#if 0
+ 	CLK_SYSCLKConfig(CLK_PRESCALER_HSIDIV1);    // Fmaster = 2MHz
+    CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);    // Fcpu = 1MHz
+    
     
     // System timer init
     TIM4_Cmd(DISABLE);
-    TIM4_TimeBaseInit(TIM4_PRESCALER_2, 366);     // F = 1000000 / TimeBase
+    TIM4_TimeBaseInit(TIM4_PRESCALER_32, 183);     // F = 500000 / TimeBase
     TIM4_ClearFlag(TIM4_FLAG_UPDATE);
     TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
+    TIM4_Cmd(ENABLE);
+    
+    CLK_LSICmd(DISABLE);
+    stopAwu();
     
     // Enable pull-up for button
     GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_PU_NO_IT);
@@ -251,7 +292,7 @@ int main()
                 GPIO_WriteLow(GPIOC, GPC_CH1N_PIN);
                 GPIO_WriteHigh(GPIOC, GPC_CH2_PIN);
                 
-                smallDelay(20);
+                smallDelay(100);
                 
                 // Phase 1 OFF
                 GPIO_WriteHigh(GPIOC, GPC_CH1N_PIN);
@@ -261,21 +302,21 @@ int main()
                 GPIO_WriteLow(GPIOC, GPC_CH2N_PIN);
                 GPIO_WriteHigh(GPIOC, GPC_CH1_PIN);
                 
-                smallDelay(20);
+                smallDelay(100);
                 
                 // Phase 2 OFF
                 GPIO_WriteHigh(GPIOC, GPC_CH2N_PIN);
                 GPIO_WriteLow(GPIOC, GPC_CH1_PIN);
                 
                 // Phase 3 On
-                GPIO_WriteLow(GPIOC, GPC_CH1N_PIN);
-                GPIO_WriteHigh(GPIOC, GPC_CH2_PIN);
+                //GPIO_WriteLow(GPIOC, GPC_CH1N_PIN);
+                //GPIO_WriteHigh(GPIOC, GPC_CH2_PIN);
                 
-                smallDelay(20);
+                //smallDelay(20);
                 
                 // Phase 3 OFF
-                GPIO_WriteHigh(GPIOC, GPC_CH1N_PIN);
-                GPIO_WriteLow(GPIOC, GPC_CH2_PIN);
+                //GPIO_WriteHigh(GPIOC, GPC_CH1N_PIN);
+                //GPIO_WriteLow(GPIOC, GPC_CH2_PIN);
                 
             }
             else
@@ -284,10 +325,9 @@ int main()
             }
         }
     }
-    
-    
-    
+#endif
     //-------------------------------------//
+
     
     // Enable LSI
     CLK_LSICmd(ENABLE);

@@ -4,7 +4,8 @@
 #include "global_def.h"
 
 
-
+void UART_Init(void);
+void UART_Process(void);
 
 
 

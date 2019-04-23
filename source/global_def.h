@@ -18,12 +18,12 @@
 #define GPC_CH1N_PIN        GPIO_PIN_3
 #define GPC_CH2_PIN         GPIO_PIN_7
 #define GPC_CH2N_PIN        GPIO_PIN_4
+#define GPC_SIG_PIN         GPIO_PIN_5
 
 // GPIOD
 #define GPD_SWIM_PIN        GPIO_PIN_1
 #define GPD_VREF_PIN        GPIO_PIN_2
 #define GPD_VBAT_PIN        GPIO_PIN_3
-#define GPD_SIG_PIN         GPIO_PIN_4
 #define GPD_UART_PIN        GPIO_PIN_5
 #define GPD_BTN_PIN         GPIO_PIN_6
 
