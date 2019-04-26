@@ -112,7 +112,7 @@ void initGpio(void)
     GPIO_Init(GPIOC, GPC_LED3_PIN, GPIO_MODE_OUT_PP_HIGH_SLOW);
 
     // Button
-    GPIO_Init(GPIOA, GPA_BTNUP_PIN, GPIO_MODE_OUT_PP_LOW_SLOW);
+    GPIO_Init(GPIOA, GPA_VREF_SUPP_PIN, GPIO_MODE_OUT_PP_LOW_SLOW);
     GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_FL_NO_IT);
 
     // VCC_SEN
@@ -203,6 +203,36 @@ void incTimer(uint16_t *tmr)
 
 
 /*
+ // FIXME - test only
+                        // Measure voltage on VREF pin
+                        ADC1_Cmd(ENABLE);
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVref, ADC1_ALIGN_RIGHT);
+                        ADC1_StartConversion();
+                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
+                        volatile uint16_t adcVref = ADC1_GetConversionValue();
+
+                        // Measure voltage on VREF pin
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVbat, ADC1_ALIGN_RIGHT);
+                        ADC1_StartConversion();
+                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
+                        volatile uint16_t adcVbat = ADC1_GetConversionValue();
+
+                        // Capture input parameters (volume level / mute / etc)
+                        // Measure voltage level on BTN pin. Depending on it, mute or disable buzzer
+                        ADC1_Cmd(ENABLE);
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChBtn, ADC1_ALIGN_RIGHT);
+                        ADC1_StartConversion();
+                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
+                        uint16_t adcBtn = ADC1_GetConversionValue();
+
+                        // Select battery channel to enable digital function on BTN pin
+                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVbat, ADC1_ALIGN_RIGHT);
+*/
+
+
+
+
+/*
  TODO:
     - PWM dead time (mute level), frequency
     + Buzzer signal queue
@@ -275,7 +305,7 @@ int main()
     stopAwu();
     
     // Enable pull-up for button
-    GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_PU_NO_IT);
+    GPIO_Init(GPIOA, GPA_VREF_SUPP_PIN, GPIO_MODE_OUT_PP_HIGH_SLOW);
     sysFlag_TmrTick = 0;
     enableInterrupts(); 
     
@@ -394,65 +424,20 @@ int main()
             {
                 case ST_WAKEUP:                         // [10ms]
                     // Provide some delay to ensure supply voltage is OK
-                    if (timers.state == 4)
+                    if (timers.state == 1)
                     {
-                        // Enable external pull-up for button input (check mute level)
-                        GPIO_Init(GPIOA, GPA_BTNUP_PIN, GPIO_MODE_OUT_PP_HIGH_SLOW);
+                        // First entry
+                        // Enable external pull-up for button and voltage reference
+                        GPIO_Init(GPIOA, GPA_VREF_SUPP_PIN, GPIO_MODE_OUT_PP_HIGH_SLOW);
+                        setLed(Led2, 1);
                     }
                     if (timers.state >= 5)
                     {
-                        // FIXME - test only
-                        // Measure voltage on VREF pin
-                        ADC1_Cmd(ENABLE);
-                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVref, ADC1_ALIGN_RIGHT);
-                        ADC1_StartConversion();
-                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
-                        volatile uint16_t adcVref = ADC1_GetConversionValue();
-
-                        // Measure voltage on VREF pin
-                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVbat, ADC1_ALIGN_RIGHT);
-                        ADC1_StartConversion();
-                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
-                        volatile uint16_t adcVbat = ADC1_GetConversionValue();
-
-                        // Capture input parameters (volume level / mute / etc)
-                        // Measure voltage level on BTN pin. Depending on it, mute or disable buzzer
-                        ADC1_Cmd(ENABLE);
-                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChBtn, ADC1_ALIGN_RIGHT);
-                        ADC1_StartConversion();
-                        while (ADC1_GetFlagStatus(ADC1_FLAG_EOC) == RESET);
-                        uint16_t adcBtn = ADC1_GetConversionValue();
-
-                        // Select battery channel to enable digital function on BTN pin
-                        ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVbat, ADC1_ALIGN_RIGHT);
-
-                        // Disable external pull-up, enable pad pull-up for button
-                        GPIO_Init(GPIOA, GPA_BTNUP_PIN, GPIO_MODE_IN_FL_NO_IT);
-                        GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_PU_NO_IT);
-
-
-                        // Determine mute level depending on ADC conversion result
-                        muteLevel = (adcBtn > 970) ? MuteNone :
-                                    ((adcBtn > 880) ? Mute1 :
-                                    ((adcBtn > 810) ? Mute2 : MuteFull));
+                        // Check if starting with button pressed
+                        // Set initial mute level
+                        muteLevel = (flags.btnPressed) ? MuteFull : Mute2;
                         Buzz_SetMuteLevel(muteLevel);
-
-                        // Provide some feedback for mute level
-
-                        if (muteLevel < MuteFull)
-                        {
-                            for (i=0; i<muteLevel+1; i++)
-                            {
-                                Buzz_PutTone(Tone1, 100);
-                                Buzz_PutTone(ToneSilence, 100);
-                            }
-                        }
-                        else
-                        {
-                            // Will be displayed by LED only
-                            Buzz_PutTone(Tone1, 400);
-                            Buzz_PutTone(ToneSilence, 100);
-                        }
+                        setLed(Led2, 0);
 
                         // Detect cell count for power battery
                         // TODO
@@ -461,9 +446,9 @@ int main()
                         alarms.directControl.dirCtrlState = 0;
                         // add more here ...
 
-                        // __enable_uart();        // And other peripherals - TODO
                         if (flags.mainSupplyOk)
                         {
+                            // __enable_uart();         TODO
                             swState(ST_RUN);
                             setAwuPeriod(AWU_1MS);
                             exit = 0;
@@ -485,6 +470,18 @@ int main()
                             timers.tick = 0;
                             Buzz_Process();
                         }
+
+                        // Process initial mute level controller
+                        if (_btn.pressed)
+                        {
+                            if (timers.state < 5000)
+                            {
+                                // Beep shortly once
+                                Buzz_PutTone(Tone1, 100);
+                                // _mute_level = _current_mute_level;
+                            }
+                        }
+
                     
                         // Process direct buzzer control (level / pwm)
                         if (1)  // __cfg.dirCtrl == __LEVEL__
@@ -609,9 +606,8 @@ int main()
                     
                 case ST_SLEEP:
 
-                    // Output low level for button to prevent floating
-                    GPIO_Init(GPIOA, GPA_BTNUP_PIN, GPIO_MODE_OUT_PP_LOW_SLOW);
-                    GPIO_Init(GPIOD, GPD_BTN_PIN, GPIO_MODE_IN_FL_NO_IT);
+                    // Output low level for button to prevent floating and current leakage
+                    GPIO_Init(GPIOA, GPA_VREF_SUPP_PIN, GPIO_MODE_OUT_PP_LOW_SLOW);
 
                     stopAwu();       		// No interrupts from AWU in sleep mode - only external irq
                     asm("HALT");            // Halt - AFU is disabled
