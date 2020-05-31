@@ -52,6 +52,8 @@
 ../../source/stm8s_def.h
 ../../source/buzzer.cpp
 ../../source/buzzer.h
+../../source/buttons.c
+../../source/buttons.h
 ../../source/buzzer_private.h
 ../../source/main.cpp
 ../../source/pwm.cpp

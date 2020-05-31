@@ -9,7 +9,7 @@
 // Timer setup for a tone from tone_t set
 typedef struct {
     uint16_t pwm_period;
-    uint8_t pwm_dt[MuteCount];
+    uint8_t pwm_dt[VolumeCount];
 } timCtrl_t;
 
 
@@ -33,7 +33,7 @@ typedef enum {
 typedef struct {
     uint16_t timer;
     uint16_t toneDurationMs;
-    eMuteLevel muteLevel;
+    eVolume volume;
     buzQueueElement_t queue[BUZZER_QUEUE_SIZE];
     uint8_t queueWrCount;
 

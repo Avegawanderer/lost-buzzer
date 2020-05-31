@@ -37,14 +37,16 @@ DTG[7:5]            DT
 static eBuzState buzzerState = BZ_IDLE;
 static buzzerData_t buzzerData;
 
+// Frequency = 1_000_000 / PWM Period
+
 static timCtrl_t toneCtrl[ToneCount] =
 {
-    // PWM Period (must be even)      MuteNone             Mute1               Mute2               MuteFull
-    {.pwm_period = 100,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // ToneSilence
-    {.pwm_period = 366,     .pwm_dt = {DT(180),             DT(320),            DT(356),            0xFF} },        // Tone1
-    {.pwm_period = 416,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // Tone2
-    {.pwm_period = 480,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} },        // Tone3
-    {.pwm_period = 500,     .pwm_dt = {0xFF,                0xFF,               0xFF,               0xFF} }         // Tone4
+    // PWM Period (must be even)        VolumeSilent    VolumeLow       VolumeMedium    VolumeHigh
+    {.pwm_period = 100,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // ToneSilence
+    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT(356),        DT(320),        DT(180)    } },        // Tone1
+    {.pwm_period = 416,     .pwm_dt = { 0xFF,           DT(400),        DT(380),        DT(210)    } },        // Tone2
+    {.pwm_period = 480,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // Tone3
+    {.pwm_period = 1000,    .pwm_dt = { 0xFF,           DT(980),        DT(950),        DT(930)    } }         // Tone4
 };
 
 
@@ -60,24 +62,24 @@ void onBuzzerStateChanged(uint8_t isActive);
 // Control interface
 
 
-void Buzz_Init(void)
+void Buzz_Init(eVolume volume)
 {
     buzzerState = BZ_IDLE;
-    buzzerData.muteLevel = MuteNone;
+    buzzerData.volume = volume;
     buzzerData.queueWrCount = 0;
 }
 
 
-void Buzz_SetMuteLevel(eMuteLevel muteLevel)
+void Buzz_SetVolume(eVolume volume)
 {
-    buzzerData.muteLevel = muteLevel;
+    buzzerData.volume = volume;
 }
 
 
 void Buzz_BeepContinuous(eTone tone)
 {
     // This function does not require FSM to be called
-    PWM_Beep(toneCtrl[tone].pwm_period, toneCtrl[tone].pwm_dt[buzzerData.muteLevel]);
+    PWM_Beep(toneCtrl[tone].pwm_period, toneCtrl[tone].pwm_dt[buzzerData.volume]);
     buzzerState = BZ_CONTINUOUS;
     // Clear queue
     buzzerData.queueWrCount = 0;
@@ -143,7 +145,7 @@ void Buzz_Process(void)
                     buzzerData.queue[i] = buzzerData.queue[i+1];
                 }
                 buzzerData.queueWrCount--;
-                PWM_Beep(toneCtrl[elm.tone].pwm_period, toneCtrl[elm.tone].pwm_dt[buzzerData.muteLevel]);
+                PWM_Beep(toneCtrl[elm.tone].pwm_period, toneCtrl[elm.tone].pwm_dt[buzzerData.volume]);
                 onBuzzerStateChanged(elm.tone != ToneSilence);
                 buzzerData.timer = 0;
                 buzzerData.toneDurationMs = elm.ms;

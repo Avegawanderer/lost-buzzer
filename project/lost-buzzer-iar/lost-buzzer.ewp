@@ -16,7 +16,7 @@
                 <debug>1</debug>
                 <option>
                     <name>GenDeviceSelectMenu</name>
-                    <state>STM8S003K3	STM8S003K3</state>
+                    <state>STM8S003F3	STM8S003F3</state>
                 </option>
                 <option>
                     <name>GenCodeModel</name>
@@ -1736,6 +1736,12 @@
             <name>$PROJ_DIR$\..\..\library\STM8S_StdPeriph_Driver\src\stm8s_wwdg.c</name>
         </file>
     </group>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\buttons.c</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\..\..\source\buttons.h</name>
+    </file>
     <file>
         <name>$PROJ_DIR$\..\..\source\buzzer.cpp</name>
     </file>

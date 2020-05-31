@@ -49,13 +49,17 @@ void PWM_Beep(uint16_t pwm_period, uint8_t pwm_deadtime)
 
     TIM1_Cmd(ENABLE);
     TIM1->DTR = pwm_deadtime;
+#if ENA_PWM_OUTPUT == 1
     TIM1_CtrlPWMOutputs(ENABLE);
+#endif
 }
 
 
 void PWM_Stop(void)
 {
+#if ENA_PWM_OUTPUT == 1
     TIM1_CtrlPWMOutputs(DISABLE);
+#endif
     TIM1_Cmd(DISABLE);
 }
 

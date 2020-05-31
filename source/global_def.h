@@ -4,16 +4,21 @@
 #include "stm8s.h"
 
 
+// Debug option
+#define ENA_PWM_OUTPUT          1
+
+
 // GPIOA
-#define GPA_LED1_PIN        GPIO_PIN_2
-#define GPA_LED2_PIN        GPIO_PIN_3
-#define GPA_VREF_SUPP_PIN   GPIO_PIN_1
+#define GPA_LED1_PIN        GPIO_PIN_2     // LED1 and LED2 are swapped on PCB
+#define GPA_LED2_PIN        GPIO_PIN_1
+#define GPA_LED3_PIN        GPIO_PIN_3
+#define GPA_BTNUP_PIN       GPIO_PIN_1
 
 // GPIOB
 #define GPB_VCCSEN_PIN      GPIO_PIN_4
+#define GPB_BTN_PIN         GPIO_PIN_5
 
 // GPIOC
-#define GPC_LED3_PIN        GPIO_PIN_5
 #define GPC_CH1_PIN         GPIO_PIN_6
 #define GPC_CH1N_PIN        GPIO_PIN_3
 #define GPC_CH2_PIN         GPIO_PIN_7
@@ -24,8 +29,10 @@
 #define GPD_SWIM_PIN        GPIO_PIN_1
 #define GPD_VREF_PIN        GPIO_PIN_2
 #define GPD_VBAT_PIN        GPIO_PIN_3
+#define GPD_VREF_SUPP_PIN   GPIO_PIN_4
 #define GPD_UART_PIN        GPIO_PIN_5
-#define GPD_BTN_PIN         GPIO_PIN_6
+#define GPD_RESERVED_PINS   GPIO_PIN_6
+
 
 
 
@@ -46,7 +53,6 @@ typedef enum {
 typedef struct {
     GPIO_TypeDef *GPIO;
     uint8_t pin;
-    uint8_t state;
 } ledCtrl_t;
 
 // Buzzer
@@ -61,12 +67,12 @@ typedef enum {
 } eTone;
 
 typedef enum {
-    MuteNone,       // Maximum sound
-    Mute1,          // Something at middle
-    Mute2,          // Very quiet sound
-    MuteFull,       // No sound at all
-    MuteCount
-} eMuteLevel;
+    VolumeSilent,       // No sound at all
+    VolumeLow,          // Very quiet sound
+    VolumeMedium,       // Something at middle
+    VolumeHigh,         // Maximum sound
+    VolumeCount
+} eVolume;
 
 // Settings
 typedef struct {
@@ -80,7 +86,12 @@ typedef struct {
 // FSM logical states
 typedef enum {
     ST_WAKEUP,
+    ST_NOSUPPLY,        // Buzzer level selection
+    ST_NOSUPPLY_EXIT,
+    ST_WAITSUPPLY,
     ST_RUN,
+    ST_RUN_SETUP_VOLUME,
+    ST_RUN_SETUP_VOLUME_EXIT,
     ST_PREALARM,
     ST_ALARM,
     ST_SLEEP,
