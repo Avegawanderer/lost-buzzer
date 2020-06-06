@@ -43,7 +43,7 @@ static timCtrl_t toneCtrl[ToneCount] =
 {
     // PWM Period (must be even)        VolumeSilent    VolumeLow       VolumeMedium    VolumeHigh
     {.pwm_period = 100,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // ToneSilence
-    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT(356),        DT(320),        DT(180)    } },        // Tone1
+    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT(356),        DT(320),        DT(180)    } },        // Tone1                 40mA @4.2V, 52mA @5V, 31 mA @3.3V
     {.pwm_period = 416,     .pwm_dt = { 0xFF,           DT(400),        DT(380),        DT(210)    } },        // Tone2
     {.pwm_period = 480,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // Tone3
     {.pwm_period = 1000,    .pwm_dt = { 0xFF,           DT(980),        DT(950),        DT(930)    } }         // Tone4

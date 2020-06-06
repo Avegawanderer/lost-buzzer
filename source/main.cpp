@@ -50,7 +50,7 @@ static struct {
 
 volatile uint8_t sysFlag_TmrTick;
 static bState_t state;
-static uint8_t buzzerVolume = VolumeLow;
+static uint8_t buzzerVolume = VolumeHigh;
 
 // Global structure for storing settings
 config_t cfg;
@@ -301,6 +301,8 @@ int main()
     initGpio();
     Buzz_Init(buzzerVolume);
     
+    SET_LED(Led1, 1);
+    
     // GPIO PWM test for buzzer
     //testPwm();
       
@@ -330,30 +332,27 @@ int main()
     while(1)
     {
         // Wait for interrupt from AWU
-        
-        // FIXME
-        //SET_LED(Led3, 0);
+        // WFI - 600uA
+        // HALT (active) - 220uA
         
         while (!sysFlag_TmrTick)
         {
-            if ((state == ST_RUN)/* || (state == ST_WAKEUP)*/)
+            if ((state == ST_PREALARM) || (state == ST_ALARM))
             {
-                // Peripherals must be enabled for this states
-                asm("WFI");
-            }
-            else
-            {
-                // Pre-alarm or alarm, backup battery supply, stay halted when timer is disabled
+                // Backup battery supply, stay halted when timer is disabled
                 if (Buzz_IsActive())
                     asm("WFI");
                 else
                     asm("HALT");    // Active halt - AFU is enabled
             }
+            else
+            {
+                // Other states (except ST_SLEEP)
+                // Active HALT could be also used but WFI is preferred for LED1 (PA1) which is forced to WPU input by HALT
+                asm("WFI");
+            }
         }
         sysFlag_TmrTick = 0;
-        
-        // FIXME
-        //SET_LED(Led3, 1);
         
         // Check BTN state
         ProcessButtons();
@@ -470,6 +469,7 @@ int main()
                             SET_LED(Led1, volumeLedIndication[buzzerVolume].led1);
                             SET_LED(Led2, volumeLedIndication[buzzerVolume].led2);
                             SET_LED(Led3, volumeLedIndication[buzzerVolume].led3);
+                            break;
                         }
                     
                         // Process direct buzzer control (level / pwm)
@@ -576,14 +576,14 @@ int main()
                         if (++timers.dly >= 100)
                         {
                             timers.dly = 0;
-                            if (++timers.evt == 5)
+                            if (++timers.evt == 10)
                             {
                                 swState(ST_ALARM);
                             }
                             else
                             {
                                 // Beep shortly few times
-                                Buzz_PutTone(Tone1, 20);
+                                Buzz_PutTone(Tone1, 10);
                             }
                         }
                     }
@@ -611,9 +611,17 @@ int main()
                         if (timers.dly == 0)
                         {
                             // Beep long few times
-                            Buzz_PutTone(Tone1, 250);
+                            Buzz_PutTone(Tone1, 200);
+                            Buzz_PutTone(ToneSilence, 100);
+                            Buzz_PutTone(Tone1, 25);
+                            Buzz_PutTone(ToneSilence, 25);
+                            Buzz_PutTone(Tone1, 25);
+                            Buzz_PutTone(ToneSilence, 25);
+                            Buzz_PutTone(Tone1, 25);
+                            Buzz_PutTone(ToneSilence, 25);
+                            Buzz_PutTone(Tone1, 25);
                         }
-                        if (++timers.dly >= 250)
+                        if (++timers.dly >= 300)
                         {
                             timers.dly = 0;
                         }

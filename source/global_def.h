@@ -12,7 +12,6 @@
 #define GPA_LED1_PIN        GPIO_PIN_2     // LED1 and LED2 are swapped on PCB
 #define GPA_LED2_PIN        GPIO_PIN_1
 #define GPA_LED3_PIN        GPIO_PIN_3
-#define GPA_BTNUP_PIN       GPIO_PIN_1
 
 // GPIOB
 #define GPB_VCCSEN_PIN      GPIO_PIN_4
