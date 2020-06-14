@@ -86,11 +86,8 @@ typedef struct {
 typedef enum {
     ST_WAKEUP,
     ST_NOSUPPLY,        // Buzzer level selection
-    ST_NOSUPPLY_EXIT,
-    ST_WAITSUPPLY,
     ST_RUN,
     ST_RUN_SETUP_VOLUME,
-    ST_RUN_SETUP_VOLUME_EXIT,
     ST_PREALARM,
     ST_ALARM,
     ST_SLEEP,

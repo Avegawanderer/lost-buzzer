@@ -12,6 +12,7 @@ void Buzz_BeepContinuous(eTone tone);
 void Buzz_PutTone(eTone tone, uint16_t ms);
 void Buzz_Stop(void);
 uint8_t Buzz_IsActive(void);
+uint8_t Buzz_IsContinuousBeep(void);
 void Buzz_Process(void);
 
 

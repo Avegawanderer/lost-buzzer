@@ -106,9 +106,14 @@ void Buzz_Stop(void)
 
 uint8_t Buzz_IsActive(void)
 {
-    return (buzzerState != BZ_IDLE);
+    return (buzzerState != BZ_IDLE) || (buzzerData.queueWrCount > 0);
 }
 
+
+uint8_t Buzz_IsContinuousBeep(void)
+{
+    return (buzzerState == BZ_CONTINUOUS);
+}
 
 
 //=================================================================//
