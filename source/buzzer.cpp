@@ -9,26 +9,6 @@
 
 // see buzzer_private.h
 
-/*
-DTG[7:5]            DT
-    0xx (0x00)            DTG[6:0]  * (1*t)     0 to 127, step 1
-    10x (0x80)      (64 + DTG[5:0]) * (2*t)     128 to 254, step 2
-    110 (0xC0)      (32 + DTG[4:0]) * (8*t)     256 to 504, step 8
-    111 (0xE0)      (32 + DTG[4:0]) * (16*t)    512 to 1008, step 16
-
-    t = TIM1 clock Fck_psc, before prescaler
-    DT may vary from 0 (no dead time at all) to 1023 (output is kept idle)
-*/
-
-#define DT_0xx(x)   (x)
-#define DT_10x(x)   ((x / 2) - 64 + 0x80)
-#define DT_110(x)   ((x / 8) - 32 + 0xC0)
-#define DT_111(x)   ((x / 16) - 32 + 0xE0)
-
-#define DT(x)       ((x < 128) ? DT_0xx(x) : \
-                    ((x < 256) ? DT_10x(x) : \
-                    ((x < 512) ? DT_110(x) : DT_111(x))))
-
 
 //=================================================================//
 // Data
@@ -37,25 +17,12 @@ DTG[7:5]            DT
 static eBuzState buzzerState = BZ_IDLE;
 static buzzerData_t buzzerData;
 
-// Frequency = 1_000_000 / PWM Period
-
-static timCtrl_t toneCtrl[ToneCount] =
-{
-    // PWM Period (must be even)        VolumeSilent    VolumeLow       VolumeMedium    VolumeHigh
-    {.pwm_period = 100,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // ToneSilence
-    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT(356),        DT(320),        DT(180)    } },        // Tone1                 40mA @4.2V, 52mA @5V, 31 mA @3.3V
-    {.pwm_period = 416,     .pwm_dt = { 0xFF,           DT(400),        DT(380),        DT(210)    } },        // Tone2
-    {.pwm_period = 480,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // Tone3
-    {.pwm_period = 1000,    .pwm_dt = { 0xFF,           DT(980),        DT(950),        DT(930)    } }         // Tone4
-};
-
 
 //=================================================================//
 // Externals
 
 // Callback for LEDs management
 void onBuzzerStateChanged(uint8_t isActive);
-
 
 
 //=================================================================//
@@ -79,7 +46,7 @@ void Buzz_SetVolume(eVolume volume)
 void Buzz_BeepContinuous(eTone tone)
 {
     // This function does not require FSM to be called
-    PWM_Beep(toneCtrl[tone].pwm_period, toneCtrl[tone].pwm_dt[buzzerData.volume]);
+    PWM_Beep(tone, buzzerData.volume);
     buzzerState = BZ_CONTINUOUS;
     // Clear queue
     buzzerData.queueWrCount = 0;
@@ -150,7 +117,7 @@ void Buzz_Process(void)
                     buzzerData.queue[i] = buzzerData.queue[i+1];
                 }
                 buzzerData.queueWrCount--;
-                PWM_Beep(toneCtrl[elm.tone].pwm_period, toneCtrl[elm.tone].pwm_dt[buzzerData.volume]);
+                PWM_Beep(elm.tone, buzzerData.volume);
                 onBuzzerStateChanged(elm.tone != ToneSilence);
                 buzzerData.timer = 0;
                 buzzerData.toneDurationMs = elm.ms;

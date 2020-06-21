@@ -56,6 +56,7 @@ typedef struct {
 
 // Buzzer
 // Frequencies of the buzzer signals are limited to this set
+// TODO: rename to exact frequencies
 typedef enum {
     ToneSilence,
     Tone1,

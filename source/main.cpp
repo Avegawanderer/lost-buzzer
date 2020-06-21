@@ -8,13 +8,33 @@
 #include "global_def.h"
 #include "buzzer.h"
 #include "buttons.h"
-
+#include "pwm.h"
 
 
 //=================================================================//
 // Data types and definitions
 
 #define DFLT_VOLUME             VolumeSilent      //VolumeSilent VolumeHigh
+
+
+// Wait for interrupts - peripherals are active
+#define LP_WFI_SYSTMR()         do {                                    \
+                                    sysFlag_TmrTick = 0;                \
+                                    while (sysFlag_TmrTick == 0)        \
+                                    {                                   \
+                                        asm("WFI");                     \
+                                    }                                   \
+                                } while (0)
+
+
+// Active halt - wait for interrupt from AFU
+#define LP_HALT_SYSTMR()        do {                                    \
+                                    sysFlag_TmrTick = 0;                \
+                                    while (sysFlag_TmrTick == 0)        \
+                                    {                                   \
+                                        asm("HALT");                    \
+                                    }                                   \
+                                } while (0)
 
 
 //=================================================================//
@@ -46,6 +66,7 @@ static struct {
 } timers;
 
 
+static volatile uint8_t sysFlag_TmrTick;
 static bState_t state;
 static uint8_t buzzerVolume = VolumeSilent;
 
@@ -215,7 +236,7 @@ void swState(bState_t newState)
 
 /*
  TODO:
-    - PWM dead time (mute level), frequency
+    + PWM dead time (mute level), frequency
     + Buzzer signal queue
     - UART RX/TX, autobaud
     + PWM input capture
@@ -239,9 +260,8 @@ int main()
     
     initGpio();
     Buzz_Init((eVolume)buzzerVolume);
-    
-    // GPIO PWM test for buzzer
-    //testPwm();
+
+    // Simple greeting for initial power-on
     SET_LED(Led1, 1);
       
     // Enable LSI
@@ -254,9 +274,6 @@ int main()
     TIM4_DeInit();
     TIM4_TimeBaseInit(TIM4_PRESCALER_16, 249);     // F = (Fmaster / Prescaler) / Period
     TIM4_ITConfig(TIM4_IT_UPDATE, DISABLE);
-
-    // AWU setup for WAKEUP timebase
-    startAwu(AWU_10MS);
     
     // Use Active-halt with main voltage regulator (MVR) powered off 
     // (increased startup time of ~50us is acceptable)
@@ -276,20 +293,31 @@ int main()
         switch (state)
         {
             case ST_WAKEUP:
+                // AWU setup for WAKEUP timebase
+                startAwu(AWU_10MS);
                 if (isMainSupplyPresent())
                 {
                     // Wait for supply to stabilize for about 20ms
-                    asm("HALT");            // Active halt - wait for interrupt from AFU
-                    asm("HALT");            // Active halt - wait for interrupt from AFU
+                    LP_HALT_SYSTMR();
+                    LP_HALT_SYSTMR();
 
                     // Check once again
                     if (isMainSupplyPresent())
                     {
-                        SET_LED(Led1, 1);
-                        SET_LED(Led2, 1);
-                        SET_LED(Led3, 1);
                         startAwu(AWU_100MS);
-                        asm("WFI");     // Wait for interrupts - peripherals are active
+
+                        SET_LED(Led1, 1);
+                        Buzz_BeepContinuous(Tone3);
+                        LP_WFI_SYSTMR();
+
+                        SET_LED(Led2, 1);
+                        Buzz_BeepContinuous(Tone2);
+                        LP_WFI_SYSTMR();
+
+                        SET_LED(Led3, 1);
+                        Buzz_BeepContinuous(Tone1);
+                        LP_WFI_SYSTMR();
+
                         swState(ST_RUN);
                     }
                     else
@@ -327,7 +355,7 @@ int main()
                         SET_LED(Led3, volumeLedIndication[buzzerVolume].led3);
                     }
 
-                    asm("WFI");     // Wait for interrupts - peripherals are active
+                    LP_WFI_SYSTMR();
 
                     if (isMainSupplyPresent())
                     {
@@ -349,7 +377,7 @@ int main()
                         Buzz_PutTone(Tone1, 100);
                         while (Buzz_IsActive())
                         {
-                            asm("WFI");     // Wait for interrupts - peripherals are active
+                            LP_WFI_SYSTMR();
                             Buzz_Process();
                         }
                         swState(ST_SLEEP);
@@ -374,7 +402,9 @@ int main()
                 // TODO: Enable other peripherals
                 while (1)
                 {
-                    asm("WFI");     // Wait for interrupts - peripherals are active
+                    //SET_LED(Led1, 0);
+                    LP_WFI_SYSTMR();
+                    //SET_LED(Led1, 1);
 
                     if (!isMainSupplyPresent())
                     {
@@ -424,7 +454,7 @@ int main()
                         SET_LED(Led3, volumeLedIndication[buzzerVolume].led3);
                     }
 
-                    asm("WFI");     // Wait for interrupts - peripherals are active
+                    LP_WFI_SYSTMR();
 
                     // Check BTN state
                     ProcessButtons();
@@ -439,7 +469,7 @@ int main()
                         Buzz_PutTone(Tone1, 100);
                         while (Buzz_IsActive())
                         {
-                            asm("WFI");     // Wait for interrupts - peripherals are active
+                            LP_WFI_SYSTMR();
                             Buzz_Process();
                         }
                         swState(ST_RUN);
@@ -460,9 +490,9 @@ int main()
                 while(1)
                 {
                     if (Buzz_IsActive())
-                        asm("WFI");             // Wait for interrupts - peripherals are active
+                        LP_WFI_SYSTMR();
                     else
-                        asm("HALT");            // Active halt - wait for interrupt from AFU
+                        LP_HALT_SYSTMR();
 
                     if (isMainSupplyPresent())
                     {
@@ -505,9 +535,9 @@ int main()
                 while(1)
                 {
                     if (Buzz_IsActive())
-                        asm("WFI");             // Wait for interrupts - peripherals are active
+                        LP_WFI_SYSTMR();
                     else
-                        asm("HALT");            // Active halt - wait for interrupt from AFU
+                        LP_HALT_SYSTMR();
 
                     // Alarm is emitted until battery is drained, button is pressed or
                     // main supply voltage is reapplied
@@ -531,16 +561,16 @@ int main()
                     }
                     if (timers.dly == 0)
                     {
-                        // Beep long few times
-                        Buzz_PutTone(Tone1, 200);
-                        Buzz_PutTone(ToneSilence, 100);
-                        Buzz_PutTone(Tone1, 30);
-                        Buzz_PutTone(ToneSilence, 30);
-                        Buzz_PutTone(Tone1, 30);
-                        Buzz_PutTone(ToneSilence, 30);
-                        Buzz_PutTone(Tone1, 30);
-                        Buzz_PutTone(ToneSilence, 30);
-                        Buzz_PutTone(Tone1, 30);
+                        // Emit alarm signal
+                        Buzz_PutTone(Tone4, 20);
+                        Buzz_PutTone(Tone1, 20);
+                        Buzz_PutTone(Tone4, 20);
+                        Buzz_PutTone(Tone1, 20);
+                        Buzz_PutTone(Tone4, 20);
+                        Buzz_PutTone(Tone1, 20);
+                        Buzz_PutTone(Tone4, 20);
+                        Buzz_PutTone(Tone1, 20);
+                        Buzz_PutTone(Tone4, 20);
                     }
                     if (++timers.dly >= 300)
                     {
@@ -565,7 +595,6 @@ int main()
 
                 // See what happened
                 swState(ST_WAKEUP);
-                startAwu(AWU_10MS);
                 break;
 
         }  // ~switch (state)
@@ -576,6 +605,8 @@ int main()
 // Callback from buzzer FSM
 void onBuzzerStateChanged(uint8_t isActive)
 {
+    if (state == ST_WAKEUP)
+        return;
     SET_LED(Led3, isActive);
 }
 
@@ -588,8 +619,10 @@ void onBuzzerStateChanged(uint8_t isActive)
 
 INTERRUPT_HANDLER(IRQ_Handler_TIM4, 23)
 {
-    TIM4_ClearITPendingBit(TIM4_IT_UPDATE);
-    // Do nothing. Interrupt handler is used to run main loop.
+    // Clear the IT pending Bit
+    TIM4->SR1 = (uint8_t)(~TIM4_IT_UPDATE);
+    // Set global flag. Interrupt handler is used to run main loop.
+    sysFlag_TmrTick = 1;
 }
 
 
@@ -598,7 +631,8 @@ INTERRUPT_HANDLER(IRQ_Handler_AWU, 1)
     volatile unsigned char reg;
     // Reading AWU_CSR register clears the interrupt flag.
     reg = AWU->CSR;
-    // Do nothing. Interrupt handler is used to run main loop.
+    // Set global flag. Interrupt handler is used to run main loop.
+    sysFlag_TmrTick = 1;
 }
 
 
@@ -613,7 +647,7 @@ INTERRUPT_HANDLER(IRQ_Handler_GPIOB, 4)
 
 //=================================================================//
 // Expiremental
-
+#if 0
 
 void testPwm(void)
 {
@@ -681,6 +715,7 @@ void testPwm(void)
 }
 
 
+/*
 
 void testAdc(void)
 {
@@ -707,7 +742,7 @@ void testAdc(void)
     uint16_t adcBtn = ADC1_GetConversionValue();
 }
 
-
+*/
 /*
  // FIXME - test only
                         // Measure voltage on VREF pin
@@ -735,3 +770,4 @@ void testAdc(void)
                         ADC1_ConversionConfig(ADC1_CONVERSIONMODE_SINGLE, adcChVbat, ADC1_ALIGN_RIGHT);
 */
 
+#endif

@@ -5,7 +5,7 @@
 
 
 
-void PWM_Beep(uint16_t pwm_period, uint8_t pwm_deadtime);
+void PWM_Beep(eTone tone, eVolume volume);
 void PWM_Stop(void);
 
 

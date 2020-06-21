@@ -6,11 +6,6 @@
 // Tone queue size
 #define BUZZER_QUEUE_SIZE       20
 
-// Timer setup for a tone from tone_t set
-typedef struct {
-    uint16_t pwm_period;
-    uint8_t pwm_dt[VolumeCount];
-} timCtrl_t;
 
 
 // Queue element
