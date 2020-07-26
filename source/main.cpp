@@ -14,47 +14,36 @@
 //=================================================================//
 // Data types and definitions
 
-#define DFLT_VOLUME             VolumeSilent      //VolumeSilent VolumeHigh
+#define DFLT_VOLUME             VolumeLow      //VolumeSilent VolumeLow VolumeMedium VolumeHigh
 
 
-// Wait for interrupts - peripherals are active
-#define LP_WFI_SYSTMR()         do {                                    \
-                                    sysFlag_TmrTick = 0;                \
-                                    while (sysFlag_TmrTick == 0)        \
-                                    {                                   \
-                                        asm("WFI");                     \
-                                    }                                   \
-                                } while (0)
+// // Wait for interrupts - peripherals are active
+// #define LP_WFI_SYSTMR(numTicks)     while (numTicks > 0)                \
+//                                     {                                   \
+//                                         sysFlag_TmrTick = 0;            \
+//                                         while (sysFlag_TmrTick == 0)    \
+//                                         {                               \
+//                                             asm("WFI");                 \
+//                                         }                               \
+//                                         numTicks--;                     \
+//                                     }                                   \
 
 
-// Active halt - wait for interrupt from AFU
-#define LP_HALT_SYSTMR()        do {                                    \
-                                    sysFlag_TmrTick = 0;                \
-                                    while (sysFlag_TmrTick == 0)        \
-                                    {                                   \
-                                        asm("HALT");                    \
-                                    }                                   \
-                                } while (0)
+// // Active halt - wait for interrupt from AFU
+// #define LP_HALT_SYSTMR(numTicks)    while (numTicks > 0)                \
+//                                     {                                   \
+//                                         sysFlag_TmrTick = 0;            \
+//                                         while (sysFlag_TmrTick == 0)    \
+//                                         {                               \
+//                                             asm("HALT");                \
+//                                         }                               \
+//                                         numTicks--;                     \
+//                                     }                                   \
 
 
 //=================================================================//
 // Data
 
-//static struct {
-
-//    // Alarm for power battery monitor
-//    struct {
-//        uint8_t doLowBatBeep;
-//    } powBat;
-
-//    // Alarm for direct control (PWM or level)
-//    struct {
-//        uint8_t dirCtrlState;
-//        uint8_t startContBeep;
-//        uint8_t stopContBeep;
-//        uint8_t startTimeoutBeep;
-//    } directControl;
-//} alarms;
 
 
 
@@ -68,7 +57,7 @@ static struct {
 
 static volatile uint8_t sysFlag_TmrTick;
 static bState_t state;
-static uint8_t buzzerVolume = VolumeSilent;
+static uint8_t buzzerVolume = DFLT_VOLUME;
 
 // Global structure for storing settings
 config_t cfg;
@@ -173,6 +162,9 @@ void initGpio(void)
 
     // Unused pins to prevent floating
     GPIO_Init(GPIOD, (GPIO_Pin_TypeDef)GPD_RESERVED_PINS, GPIO_MODE_IN_PU_NO_IT);
+
+    // SWIM pin has pull-up enabled by reset (STM8 reference manual, 11.9.4 Port x control register 1 (Px_CR1) description):
+    // Reset value: 0x00 except for PD_CR1 which reset value is 0x02.
 }
 
 
@@ -204,10 +196,34 @@ uint8_t isDirectControlInputActive(void)
 //=================================================================//
 // FSM and main loop
 
-void smallDelay(uint8_t n)
+
+// Wait for interrupts - peripherals are active
+void LP_WFI_SYSTMR(uint8_t numTicks)     
 {
-    volatile uint8_t i;
-    for (i=0; i<n; i++);
+    while (numTicks > 0)                
+    {                                   
+        sysFlag_TmrTick = 0;            
+        while (sysFlag_TmrTick == 0)    
+        {                               
+            asm("WFI");                 
+        }                               
+        numTicks--;                     
+    }           
+}                        
+
+
+// Active halt - wait for interrupt from AFU
+void LP_HALT_SYSTMR(uint8_t numTicks)    
+{
+    while (numTicks > 0)                
+    {                                   
+        sysFlag_TmrTick = 0;            
+        while (sysFlag_TmrTick == 0)    
+        {                               
+            asm("HALT");                
+        }                               
+        numTicks--;                     
+    }                                   
 }
 
 
@@ -232,8 +248,6 @@ void swState(bState_t newState)
 }
 
 
-
-
 /*
  TODO:
     + PWM dead time (mute level), frequency
@@ -242,7 +256,7 @@ void swState(bState_t newState)
     + PWM input capture
     - VREF ADC check
     - VBAT ADC check
-    - SWIM pull-up
+    + SWIM pull-up
     - EEPROM CFG
 
 Low-power:
@@ -276,10 +290,10 @@ int main()
     TIM4_ITConfig(TIM4_IT_UPDATE, DISABLE);
     
     // Use Active-halt with main voltage regulator (MVR) powered off 
-    // (increased startup time of ~50us is acceptable)
+    // This option drops consumption down to 60uA instead of 200
+    // Increased startup time of ~50us is acceptable
     // Do not used fast clock wakeup since HSI is always used
-    //CLK_SlowActiveHaltWakeUpCmd(ENABLE);
-    //CLK_SlowActiveHaltWakeUpCmd(DISABLE);
+    CLK_SlowActiveHaltWakeUpCmd(ENABLE);
     
     // Init FSM
     swState(ST_WAKEUP);
@@ -298,25 +312,22 @@ int main()
                 if (isMainSupplyPresent())
                 {
                     // Wait for supply to stabilize for about 20ms
-                    LP_HALT_SYSTMR();
-                    LP_HALT_SYSTMR();
+                    LP_HALT_SYSTMR(2);
 
                     // Check once again
                     if (isMainSupplyPresent())
                     {
-                        startAwu(AWU_100MS);
-
                         SET_LED(Led1, 1);
                         Buzz_BeepContinuous(Tone3);
-                        LP_WFI_SYSTMR();
+                        LP_WFI_SYSTMR(10);
 
                         SET_LED(Led2, 1);
                         Buzz_BeepContinuous(Tone2);
-                        LP_WFI_SYSTMR();
+                        LP_WFI_SYSTMR(10);
 
                         SET_LED(Led3, 1);
                         Buzz_BeepContinuous(Tone1);
-                        LP_WFI_SYSTMR();
+                        LP_WFI_SYSTMR(10);
 
                         swState(ST_RUN);
                     }
@@ -355,7 +366,7 @@ int main()
                         SET_LED(Led3, volumeLedIndication[buzzerVolume].led3);
                     }
 
-                    LP_WFI_SYSTMR();
+                    LP_WFI_SYSTMR(1);
 
                     if (isMainSupplyPresent())
                     {
@@ -377,7 +388,7 @@ int main()
                         Buzz_PutTone(Tone1, 100);
                         while (Buzz_IsActive())
                         {
-                            LP_WFI_SYSTMR();
+                            LP_WFI_SYSTMR(1);
                             Buzz_Process();
                         }
                         swState(ST_SLEEP);
@@ -403,7 +414,7 @@ int main()
                 while (1)
                 {
                     //SET_LED(Led1, 0);
-                    LP_WFI_SYSTMR();
+                    LP_WFI_SYSTMR(10);
                     //SET_LED(Led1, 1);
 
                     if (!isMainSupplyPresent())
@@ -454,7 +465,7 @@ int main()
                         SET_LED(Led3, volumeLedIndication[buzzerVolume].led3);
                     }
 
-                    LP_WFI_SYSTMR();
+                    LP_WFI_SYSTMR(1);
 
                     // Check BTN state
                     ProcessButtons();
@@ -469,7 +480,7 @@ int main()
                         Buzz_PutTone(Tone1, 100);
                         while (Buzz_IsActive())
                         {
-                            LP_WFI_SYSTMR();
+                            LP_WFI_SYSTMR(1);
                             Buzz_Process();
                         }
                         swState(ST_RUN);
@@ -490,9 +501,9 @@ int main()
                 while(1)
                 {
                     if (Buzz_IsActive())
-                        LP_WFI_SYSTMR();
+                        LP_WFI_SYSTMR(1);
                     else
-                        LP_HALT_SYSTMR();
+                        LP_HALT_SYSTMR(1);
 
                     if (isMainSupplyPresent())
                     {
@@ -535,9 +546,9 @@ int main()
                 while(1)
                 {
                     if (Buzz_IsActive())
-                        LP_WFI_SYSTMR();
+                        LP_WFI_SYSTMR(1);
                     else
-                        LP_HALT_SYSTMR();
+                        LP_HALT_SYSTMR(1);
 
                     // Alarm is emitted until battery is drained, button is pressed or
                     // main supply voltage is reapplied
@@ -642,12 +653,28 @@ INTERRUPT_HANDLER(IRQ_Handler_GPIOB, 4)
 }
 
 
+// INTERRUPT_HANDLER(IRQ_Handler_GPIOC, 5)
+// {
+//     if (isDirectControlInputActive())
+//     {
+
+//     }
+// }
+
+
 
 
 
 //=================================================================//
 // Expiremental
 #if 0
+
+void smallDelay(uint8_t n)
+{
+    volatile uint8_t i;
+    for (i=0; i<n; i++);
+}
+
 
 void testPwm(void)
 {
