@@ -14,31 +14,27 @@
 //=================================================================//
 // Data types and definitions
 
-#define DFLT_VOLUME             VolumeLow      //VolumeSilent VolumeLow VolumeMedium VolumeHigh
+#define DFLT_VOLUME                 VolumeHigh      //VolumeSilent VolumeLow VolumeMedium VolumeHigh
 
+// Control signal timeout alarm [ms]
+// If control signal is not changed during this time, alarm is fired
+#define CTRL_ALM_TIMEOUT            (10UL * 60 * 1000)
 
-// // Wait for interrupts - peripherals are active
-// #define LP_WFI_SYSTMR(numTicks)     while (numTicks > 0)                \
-//                                     {                                   \
-//                                         sysFlag_TmrTick = 0;            \
-//                                         while (sysFlag_TmrTick == 0)    \
-//                                         {                               \
-//                                             asm("WFI");                 \
-//                                         }                               \
-//                                         numTicks--;                     \
-//                                     }                                   \
+// Repetition period of control signal alarm [ms]
+#define CTRL_ALM_REP_PERIOD         (5000UL)
 
+// Timeout for pre-alarm state [ms]
+// When main power is gone, FSM buzzer enters pre-alarm state and stays there for specified time
+#define PREALM_TIME                 (10000UL)
 
-// // Active halt - wait for interrupt from AFU
-// #define LP_HALT_SYSTMR(numTicks)    while (numTicks > 0)                \
-//                                     {                                   \
-//                                         sysFlag_TmrTick = 0;            \
-//                                         while (sysFlag_TmrTick == 0)    \
-//                                         {                               \
-//                                             asm("HALT");                \
-//                                         }                               \
-//                                         numTicks--;                     \
-//                                     }                                   \
+// Repetition period of alarm signal [ms]
+#define ALM_PERIOD                  (5000UL)
+
+// After this time period of the alarm will be encreased to save battery [ms]
+#define ALM_2ND_STAGE_TIME          (30UL * 60 * 1000)
+
+// Repetition period of alarm signal during second stage [ms]
+#define ALM_2ND_STAGE_PERIOD        (15000UL)
 
 
 //=================================================================//
@@ -50,8 +46,8 @@
 static struct {
     uint16_t tick;
     uint16_t state;
-    uint16_t evt;
     uint16_t dly;
+    uint32_t alm;
 } timers;
 
 
@@ -235,7 +231,7 @@ void swState(bState_t newState)
     timers.tick = 0;
     timers.state = 0;
     timers.dly = 0;
-    timers.evt = 0;
+    //timers.evt = 0;
     
     buttons.action_down = 0;
     buttons.action_up = 0;
@@ -249,6 +245,106 @@ void swState(bState_t newState)
 
 
 /*
+    Possible alarms are:
+        direct level control (by FC)
+        PWM control (by receiver)
+        UART control (by FC)
+        control timeout alarm (by any of those interfaces)
+        low battery alarm
+*/
+
+static struct {
+
+    // Alarm for direct control
+    struct {
+        uint8_t isActive;
+        // Private
+    } directControl;
+
+    // Alarm for control timeout
+    struct {
+        uint8_t isActive;
+        // Private
+        uint32_t timer;
+    } controlTimeout;
+    uint32_t repeatTimer;
+} alarms;
+
+
+
+void reset_alarms(void)
+{
+    alarms.directControl.isActive = 0;
+    alarms.controlTimeout.isActive = 0;
+    alarms.controlTimeout.timer = 0;
+    alarms.repeatTimer = 0;
+}
+
+
+void check_alarms(void)
+{
+    uint8_t prevState;
+
+    // Direct control alarm
+    prevState = alarms.directControl.isActive;
+    alarms.directControl.isActive = isDirectControlInputActive();
+    if (alarms.directControl.isActive != prevState)
+    {
+        // Reset timeout alarm
+        alarms.controlTimeout.timer = 0;
+        alarms.controlTimeout.isActive = 0;
+    }
+
+    // Control timeout alarm
+    if (alarms.controlTimeout.timer < CTRL_ALM_TIMEOUT)
+    {
+        alarms.controlTimeout.timer++;
+        alarms.controlTimeout.isActive = 0;
+    }
+    else
+    {
+        alarms.controlTimeout.isActive = 1;
+    }
+}
+
+
+void alarm1(void)
+{
+    Buzz_PutTone(Tone4, 20);
+    Buzz_PutTone(Tone1, 20);
+    Buzz_PutTone(Tone4, 20);
+    Buzz_PutTone(Tone1, 20);
+    Buzz_PutTone(Tone4, 20);
+    Buzz_PutTone(Tone1, 20);
+    Buzz_PutTone(Tone4, 20);
+    Buzz_PutTone(Tone1, 20);
+    Buzz_PutTone(Tone4, 20);
+    Buzz_PutTone(Tone1, 20);
+}
+
+
+void alarm2(void)
+{
+    Buzz_PutTone(Tone2, 100);
+    Buzz_PutTone(ToneSilence, 100);
+    Buzz_PutTone(Tone2, 100);
+    Buzz_PutTone(Tone1, 100);    
+    Buzz_PutTone(ToneSilence, 100);
+    Buzz_PutTone(Tone1, 100); 
+}
+
+
+void alarm3(void)
+{
+    Buzz_PutTone(Tone4, 50);
+    Buzz_PutTone(Tone1, 80);    
+    Buzz_PutTone(Tone4, 50);
+    Buzz_PutTone(Tone1, 80); 
+    Buzz_PutTone(Tone4, 50);
+    Buzz_PutTone(Tone1, 80); 
+}
+
+/*
  TODO:
     + PWM dead time (mute level), frequency
     + Buzzer signal queue
@@ -260,15 +356,17 @@ void swState(bState_t newState)
     - EEPROM CFG
 
 Low-power:
-     1MHz CPU, HSI 16MHz:
-     WFI - 600uA
-     HALT (active) - 220uA
+     WFI (1MHz CPU, HSI 16MHz) - 600uA
+     HALT (active) - 70uA
+     HALT - 6uA
 */
 
 
 
 int main()
 {   
+    uint16_t almPeriod;
+
     CLK_SYSCLKConfig(CLK_PRESCALER_HSIDIV4);    // Fmaster = 4MHz
     CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);    // Fcpu = 4MHz
     
@@ -334,7 +432,7 @@ int main()
                     else
                     {
                         // Power glitch
-                        swState(ST_SLEEP);
+                        swState(ST_PREALARM); 
                     }
                 }
                 else
@@ -345,10 +443,14 @@ int main()
                     {
                         swState(ST_NOSUPPLY);
                     }
+                    else if (buttons.action_up & BTN)
+                    {
+                        swState(ST_SLEEP);
+                    }
                     else
                     {
                         // Unexpected wake-up
-                        swState(ST_SLEEP);
+                        swState(ST_PREALARM);
                     }
                 }
                 break;
@@ -409,12 +511,15 @@ int main()
                 stopAwu();
                 TIM4_Cmd(ENABLE);
                 TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
+                reset_alarms();
+                SET_LED((buzzerVolume == VolumeSilent) ? Led1 : Led2, 1)
+                
                 // TODO: Detect cell count for power battery
                 // TODO: Enable other peripherals
                 while (1)
                 {
                     //SET_LED(Led1, 0);
-                    LP_WFI_SYSTMR(10);
+                    LP_WFI_SYSTMR(1);
                     //SET_LED(Led1, 1);
 
                     if (!isMainSupplyPresent())
@@ -426,7 +531,7 @@ int main()
                     // Check BTN state
                     ProcessButtons();
 
-                    // Process buzzer controller
+                    // Process buzzer controller once per 10ms
                     if (++timers.tick >= 10)
                     {
                         timers.tick = 0;
@@ -440,12 +545,32 @@ int main()
                         break;
                     }
 
-                    // Simple direct control
-                    if (isDirectControlInputActive() && (!Buzz_IsContinuousBeep()))
-                        Buzz_BeepContinuous(Tone1);
-                    else if (!isDirectControlInputActive() && Buzz_IsContinuousBeep())
-                        Buzz_Stop();
+                    // Process various alarms
+                    check_alarms();
 
+                    // Apply alarms depending on priority
+                    if (alarms.controlTimeout.isActive)
+                    {
+                        if (alarms.repeatTimer == 0)
+                        {
+                            // Emit alarm signal
+                            alarm3();
+                        }
+                        if (++alarms.repeatTimer >= CTRL_ALM_REP_PERIOD)
+                        {
+                            // Alarm will be fired on next entry
+                            alarms.repeatTimer = 0;
+                        }
+                    }
+                    else if (alarms.directControl.isActive)
+                    {
+                        if (!Buzz_IsContinuousBeep())
+                            Buzz_BeepContinuous(Tone1);
+                    }
+                    else if (Buzz_IsActive())
+                    {
+                        Buzz_Stop();
+                    }
                 }
                 TIM4_Cmd(DISABLE);
                 TIM4_ITConfig(TIM4_IT_UPDATE, DISABLE);
@@ -454,6 +579,7 @@ int main()
 
             case ST_RUN_SETUP_VOLUME:
                 startAwu(AWU_10MS);
+                LP_WFI_SYSTMR(10);
                 while (1)
                 {
                     if (timers.state == 0)
@@ -484,6 +610,7 @@ int main()
                             Buzz_Process();
                         }
                         swState(ST_RUN);
+                        LP_WFI_SYSTMR(10);
                         break;
                     }
 
@@ -524,18 +651,18 @@ int main()
                         break;
                     }
 
-                    if (++timers.dly >= 100)
+                    if (++timers.state >= (PREALM_TIME / 10))
                     {
-                        timers.dly = 0;
-                        if (++timers.evt == 10)
+                        swState(ST_ALARM);
+                        break;
+                    }
+                    else
+                    {
+                        // Beep once per second indicating pre-alarm state
+                        if (++timers.dly >= 100)
                         {
-                            swState(ST_ALARM);
-                            break;
-                        }
-                        else
-                        {
-                            // Beep shortly few times
                             Buzz_PutTone(Tone1, 10);
+                            timers.dly = 0;
                         }
                     }
                 }
@@ -543,6 +670,7 @@ int main()
 
             case ST_ALARM:
                 startAwu(AWU_10MS);
+                almPeriod = ALM_PERIOD / 10;
                 while(1)
                 {
                     if (Buzz_IsActive())
@@ -570,22 +698,25 @@ int main()
                         swState(ST_SLEEP);
                         break;
                     }
+
+                    // Emit alarm signal on first entry and every time timer is done
                     if (timers.dly == 0)
                     {
-                        // Emit alarm signal
-                        Buzz_PutTone(Tone4, 20);
-                        Buzz_PutTone(Tone1, 20);
-                        Buzz_PutTone(Tone4, 20);
-                        Buzz_PutTone(Tone1, 20);
-                        Buzz_PutTone(Tone4, 20);
-                        Buzz_PutTone(Tone1, 20);
-                        Buzz_PutTone(Tone4, 20);
-                        Buzz_PutTone(Tone1, 20);
-                        Buzz_PutTone(Tone4, 20);
+                        alarm3();
                     }
-                    if (++timers.dly >= 300)
+                    if (++timers.dly >= almPeriod)
                     {
                         timers.dly = 0;
+                    }
+
+                    // After some time, reduce frequency of alarms to save battery
+                    if (timers.alm < (ALM_2ND_STAGE_TIME / 10))
+                    {
+                        timers.alm++;
+                    }
+                    else
+                    {
+                        almPeriod = (ALM_2ND_STAGE_PERIOD / 10);
                     }
                 }
                 break;

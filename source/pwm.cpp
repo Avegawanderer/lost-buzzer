@@ -51,10 +51,10 @@ static timCtrl_t toneCtrl[ToneCount] =
 {
     // PWM Period (must be even)        VolumeSilent    VolumeLow       VolumeMedium    VolumeHigh
     {.pwm_period = 100,     .pwm_dt = { 0xFF,           0xFF,           0xFF,           0xFF       } },        // ToneSilence
-    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT2(356),       DT2(320),       DT2(180)   } },        // Tone1 - 2732Hz, 40mA @4.2V, 52mA @5V, 31 mA @3.3V
-    {.pwm_period = 416,     .pwm_dt = { 0xFF,           DT2(400),       DT2(380),       DT2(250)   } },        // Tone2 - 2403Hz
-    {.pwm_period = 480,     .pwm_dt = { 0xFF,           DT2(460),       DT2(420),       DT2(350)   } },        // Tone3 - 2083Hz
-    {.pwm_period = 183,     .pwm_dt = { 0xFF,           DT(178),        DT(160),        DT(90)     } }         // Tone4 - 5464Hz
+    {.pwm_period = 366,     .pwm_dt = { 0xFF,           DT2(356),       DT2(320),       DT2(180)   } },        // Tone1 - 2732Hz, 52mA @5V, 40mA @4.2V, 31 mA @3.3V
+    {.pwm_period = 416,     .pwm_dt = { 0xFF,           DT2(400),       DT2(380),       DT2(250)   } },        // Tone2 - 2403Hz, 40mA @5V, 33mA @4.2V
+    {.pwm_period = 480,     .pwm_dt = { 0xFF,           DT2(420),       DT2(390),       DT2(260)   } },        // Tone3 - 2083Hz, 46mA @5V, 38mA @4.2V
+    {.pwm_period = 183,     .pwm_dt = { 0xFF,           DT(178),        DT(160),        DT(90)     } }         // Tone4 - 5464Hz, 50mA @5V
 };
 
 

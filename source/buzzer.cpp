@@ -56,9 +56,16 @@ void Buzz_BeepContinuous(eTone tone)
 
 void Buzz_PutTone(eTone tone, uint16_t ms)
 {
-    // Ignored if buzzer is set for continuous beep
-    // Queued beeps are processed by FSM
-    if ((buzzerData.queueWrCount < BUZZER_QUEUE_SIZE) && (buzzerState != BZ_CONTINUOUS))
+    // Tone queue processing requires FSM to be called
+    if (buzzerState == BZ_CONTINUOUS)
+    {
+        PWM_Stop();
+        buzzerState = BZ_IDLE;
+        onBuzzerStateChanged(0);
+    }
+
+    // Queued beeps will be processed by FSM
+    if (buzzerData.queueWrCount < BUZZER_QUEUE_SIZE)
         buzzerData.queue[buzzerData.queueWrCount++] = (buzQueueElement_t){tone, ms};
 }
 
@@ -67,6 +74,8 @@ void Buzz_Stop(void)
 {
     PWM_Stop();
     buzzerState = BZ_IDLE;
+    // Clear queue
+    buzzerData.queueWrCount = 0;
     onBuzzerStateChanged(0);
 }
 
